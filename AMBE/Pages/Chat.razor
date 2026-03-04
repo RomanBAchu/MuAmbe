@@ -7,22 +7,22 @@
 @implements IAsyncDisposable
 
 <div class="chat-container">
-    <div class="messages-list" style="height: 250px; overflow-y: auto; background: #eee; padding: 10px;">
+    <div class="messages-list" style="height: 200px; overflow-y: auto; background: #f0f0f0;">
         @foreach (var msg in messages) { <div><b>@msg.User:</b> @msg.Text</div> }
     </div>
 
-    <div class="video-section d-flex justify-content-around p-2">
-        <video id="localVideo" autoplay muted playsinline style="width:140px; background:black;"></video>
-        <video id="remoteVideo" autoplay playsinline style="width:140px; background:black;"></video>
+    <div class="video-grid d-flex justify-content-center gap-2 p-2">
+        <video id="localVideo" autoplay muted playsinline style="width:160px; background:black; border-radius:8px;"></video>
+        <video id="remoteVideo" autoplay playsinline style="width:160px; background:black; border-radius:8px;"></video>
     </div>
 
-    <div class="p-2 text-center">
-        <button class="btn btn-success" @onclick="StartCall">📞 Видео-эфир</button>
+    <div class="text-center p-2">
+        <button class="btn btn-success rounded-pill" @onclick="StartCall">📞 Позвонить</button>
     </div>
 
     <div class="input-group p-2">
-        <input @bind="userName" class="form-control w-25" placeholder="Имя" />
-        <input @bind="newMessage" @onkeyup="HandleKeyPress" class="form-control w-50" placeholder="Текст..." />
+        <input @bind="userName" class="form-control" placeholder="Имя" style="width:20%" />
+        <input @bind="newMessage" @onkeyup="HandleKeyPress" class="form-control" placeholder="Сообщение..." style="width:60%" />
         <button class="btn btn-primary" @onclick="Send">OK</button>
     </div>
 </div>
@@ -30,7 +30,7 @@
 @code {
     private HubConnection? hub;
     private List<Message> messages = new();
-    private string userName = "Гость", newMessage = "";
+    private string userName = "User", newMessage = "";
 
     protected override async Task OnInitializedAsync() {
         hub = new HubConnectionBuilder().WithUrl(Nav.ToAbsoluteUri("/chathub")).Build();
@@ -41,12 +41,17 @@
         });
 
         hub.On<string, string>("ReceiveSignal", async (signal, senderId) => {
-            if (signal.Contains("candidate")) await JS.InvokeVoidAsync("addIceCandidate", signal);
+            if (signal.Contains("candidate")) {
+                await JS.InvokeVoidAsync("addIceCandidate", signal);
+            }
             else if (signal.Contains("offer")) {
+                await JS.InvokeVoidAsync("startLocalVideo", "localVideo");
                 var answer = await JS.InvokeAsync<string>("processOffer", signal);
                 await hub.SendAsync("SendSignal", answer, senderId);
             }
-            else if (signal.Contains("answer")) await JS.InvokeVoidAsync("processAnswer", signal);
+            else if (signal.Contains("answer")) {
+                await JS.InvokeVoidAsync("processAnswer", signal);
+            }
         });
 
         await hub.StartAsync();
