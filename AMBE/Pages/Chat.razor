@@ -1,45 +1,56 @@
-﻿@page "/"
-@using Microsoft.AspNetCore.Components.Web
-@using AMBE.Pages
-
+﻿
+@page "/"
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
-
+@using Microsoft.AspNetCore.Components.Web  @* <--- ДОБАВЬ ЭТУ СТРОКУ *@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="chat-container">
-    <div class="messages-list" style="height: 200px; overflow-y: auto; background: #f0f0f0;">
-        @foreach (var msg in messages) { <div><b>@msg.User:</b> @msg.Text</div> }
-    </div>
 
-    @* Сетка на 4 видео *@
-    <div class="video-grid d-flex flex-wrap justify-content-center gap-2 p-2">
-        <video id="localVideo" autoplay muted playsinline style="width:140px; background:black; border-radius:8px;"></video>
-        <video id="remoteVideo1" autoplay playsinline style="width:140px; background:black; border-radius:8px;"></video>
-        <video id="remoteVideo2" autoplay playsinline style="width:140px; background:black; border-radius:8px;"></video>
-        <video id="remoteVideo3" autoplay playsinline style="width:140px; background:black; border-radius:8px;"></video>
-    </div>
+<div class="container py-3" style="max-width: 600px;">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="messages mb-3 p-2 border rounded" style="height: 200px; overflow-y: auto; background: #fff;">
+                @foreach (var msg in messages) { <div><b>@msg.User:</b> @msg.Text</div> }
+            </div>
 
-    <div class="text-center p-2">
-        <button class="btn btn-success rounded-pill" @onclick="StartCall">📞 Позвонить</button>
-    </div>
+            <div class="video-grid d-flex flex-wrap justify-content-center gap-2 mb-3">
+                <video id="localVideo" autoplay muted playsinline class="bg-dark rounded" style="width:120px; height:90px; object-fit: cover;"></video>
+                <video id="remoteVideo1" autoplay playsinline class="bg-dark rounded" style="width:120px; height:90px; object-fit: cover;"></video>
+                <video id="remoteVideo2" autoplay playsinline class="bg-dark rounded" style="width:120px; height:90px; object-fit: cover;"></video>
+                <video id="remoteVideo3" autoplay playsinline class="bg-dark rounded" style="width:120px; height:90px; object-fit: cover;"></video>
+            </div>
 
-    <div class="input-group p-2">
-        <input @bind="userName" class="form-control" placeholder="Имя" style="width:20%" />
-        <input @bind="newMessage" @onkeyup="HandleKeyPress" class="form-control" placeholder="Сообщение..." style="width:60%" />
-        <button class="btn btn-primary" @onclick="Send">OK</button>
+            <div class="text-center mb-3">
+                <button class="btn btn-success rounded-pill px-4" @onclick="StartCall">📞 Званить (@otherUsers.Count)</button>
+                <button class="btn btn-danger rounded-pill px-4" @onclick="EndCall">❌ Сброс</button>
+            </div>
+
+            <div class="input-group">
+                <input @bind="userName" class="form-control" style="width: 30%;" placeholder="Имя" />
+                <input @bind="newMessage" @onkeyup="HandleKeyPress" class="form-control" placeholder="Сообщение..." />
+                <button class="btn btn-primary" @onclick="Send">OK</button>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
     private HubConnection? hub;
     private List<Message> messages = new();
+    private List<string> otherUsers = new();
     private string userName = "Чудило", newMessage = "";
 
     protected override async Task OnInitializedAsync() {
-        hub = new HubConnectionBuilder().WithUrl(Nav.ToAbsoluteUri("/chathub")).Build();
+        hub = new HubConnectionBuilder().WithUrl(Nav.ToAbsoluteUri("/chathub")).WithAutomaticReconnect().Build();
+
+        hub.On<List<string>>("UpdateUserList", (users) => {
+            if (hub != null) {
+                otherUsers = users.Where(id => id != hub.ConnectionId).ToList();
+                InvokeAsync(StateHasChanged);
+            }
+        });
 
         hub.On<string, string>("ReceiveMessage", (u, t) => {
             messages.Add(new Message { User = u, Text = t });
@@ -47,16 +58,12 @@
         });
 
         hub.On<string, string>("ReceiveSignal", async (signal, senderId) => {
-            if (signal.Contains("candidate")) {
-                await JS.InvokeVoidAsync("addIceCandidate", signal, senderId);
-            }
+            if (signal.Contains("candidate")) await JS.InvokeVoidAsync("addIceCandidate", signal, senderId);
             else if (signal.Contains("offer")) {
                 var answer = await JS.InvokeAsync<string>("processOffer", signal, senderId);
-                await hub.SendAsync("SendSignal", answer, senderId);
+                if (hub != null) await hub.SendAsync("SendSignal", answer, senderId);
             }
-            else if (signal.Contains("answer")) {
-                await JS.InvokeVoidAsync("processAnswer", signal, senderId);
-            }
+            else if (signal.Contains("answer")) await JS.InvokeVoidAsync("processAnswer", signal, senderId);
         });
 
         await hub.StartAsync();
@@ -64,24 +71,27 @@
     }
 
     private async Task StartCall() {
-        // "all" говорит JS создать оферы для каждого в комнате
-        var offer = await JS.InvokeAsync<string>("createOffer", "all"); 
-        if (hub != null) await hub.SendAsync("SendSignal", offer, "all");
+        if (hub == null) return;
+        foreach (var userId in otherUsers) {
+            var offer = await JS.InvokeAsync<string>("createOffer", userId);
+            await hub.SendAsync("SendSignal", offer, userId);
+        }
     }
 
-    [JSInvokable]
-    public async Task SendIceCandidate(string candidate, string targetId) {
-        if (hub != null) await hub.SendAsync("SendSignal", candidate, targetId);
-    }
-
+    private async Task EndCall() => await JS.InvokeVoidAsync("hangUp");
     private async Task Send() {
         if (hub != null && !string.IsNullOrWhiteSpace(newMessage)) {
             await hub.SendAsync("SendMessage", userName, newMessage);
             newMessage = "";
         }
     }
-
     private async Task HandleKeyPress(KeyboardEventArgs e) { if (e.Key == "Enter") await Send(); }
+
+    [JSInvokable]
+    public async Task SendIceCandidate(string candidate, string targetId) {
+        if (hub != null) await hub.SendAsync("SendSignal", candidate, targetId);
+    }
+
     public async ValueTask DisposeAsync() { if (hub != null) await hub.DisposeAsync(); }
     public class Message { public string User { get; set; } = ""; public string Text { get; set; } = ""; }
 }

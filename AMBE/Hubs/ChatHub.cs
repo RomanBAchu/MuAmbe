@@ -4,32 +4,31 @@ namespace AMBE.Hubs
 {
     public class ChatHub : Hub
     {
-        // 1. Обычный чат
+        // Список всех подключенных ID
+        private static readonly Dictionary<string, string> Users = new();
+
         public async Task SendMessage(string user, string message)
         {
             await Clients.All.SendAsync("ReceiveMessage", user, message);
         }
 
-        // 2. Улучшенный сигналинг для видео
         public async Task SendSignal(string signal, string target)
         {
-            if (target == "all")
-            {
-                // Рассылаем всем, кроме того, кто звонит
-                await Clients.Others.SendAsync("ReceiveSignal", signal, Context.ConnectionId);
-            }
-            else
-            {
-                // Шлем конкретному человеку (например, ответ на звонок)
-                await Clients.Client(target).SendAsync("ReceiveSignal", signal, Context.ConnectionId);
-            }
+            await Clients.Client(target).SendAsync("ReceiveSignal", signal, Context.ConnectionId);
         }
 
         public override async Task OnConnectedAsync()
         {
-            // Сообщаем всем, что новый участник в сети
-            await Clients.Others.SendAsync("UserConnected", Context.ConnectionId);
+            Users[Context.ConnectionId] = "User"; // Временно
+            await Clients.All.SendAsync("UpdateUserList", Users.Keys.ToList());
             await base.OnConnectedAsync();
+        }
+
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            Users.Remove(Context.ConnectionId);
+            await Clients.All.SendAsync("UpdateUserList", Users.Keys.ToList());
+            await base.OnDisconnectedAsync(exception);
         }
     }
 }
