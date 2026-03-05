@@ -3,18 +3,31 @@ let peerConnection;
 let dotNetHelper;
 let iceCandidatesQueue = [];
 
+// КОНФИГ ИЗ ЛИЧНОГО КАБИНЕТА METERED (ПОЛНЫЙ СПИСОК)
 const config = {
     iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
         {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: '2e7e778f6d1b07b279414c2d',
-            credential: 'MOO2Lssrfa/+i8LI'
+            urls: "stun:stun.relay.metered.ca:80",
         },
         {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: '2e7e778f6d1b07b279414c2d',
-            credential: 'MOO2Lssrfa/+i8LI'
+            urls: "turn:global.relay.metered.ca:80",
+            username: "2e7e778f6d1b07b279414c2d",
+            credential: "MOO2Lssrfa/+i8LI",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            username: "2e7e778f6d1b07b279414c2d",
+            credential: "MOO2Lssrfa/+i8LI",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:443",
+            username: "2e7e778f6d1b07b279414c2d",
+            credential: "MOO2Lssrfa/+i8LI",
+        },
+        {
+            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            username: "2e7e778f6d1b07b279414c2d",
+            credential: "MOO2Lssrfa/+i8LI",
         }
     ],
     iceCandidatePoolSize: 10,
@@ -27,6 +40,7 @@ window.prepareWebRTC = (helper) => {
 };
 
 window.startLocalVideo = async (id) => {
+    console.log("Включаю камеру...");
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         const videoElem = document.getElementById(id);
@@ -37,7 +51,7 @@ window.startLocalVideo = async (id) => {
 };
 
 function createPC() {
-    console.log("Создаю PeerConnection (v4 стабильный)...");
+    console.log("Создаю PeerConnection (GLOBAL RELAY)...");
     peerConnection = new RTCPeerConnection(config);
 
     if (localStream) {
@@ -53,15 +67,15 @@ function createPC() {
     peerConnection.ontrack = (e) => {
         console.log("ВИДЕОПОТОК ПОЛУЧЕН!");
         const remoteVideo = document.getElementById('remoteVideo');
-        if (remoteVideo) remoteVideo.srcObject = e.streams[0];
+        if (remoteVideo) {
+            remoteVideo.srcObject = e.streams[0];
+        }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
-        console.log("ICE State:", peerConnection.iceConnectionState);
-        // АВТОВОССТАНОВЛЕНИЕ: Если дисконнект — не сдаемся
-        if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed') {
-            console.log("Попытка восстановить связь...");
-            // Здесь можно вызвать Ice Restart, если нужно
+        console.log("Статус ICE:", peerConnection.iceConnectionState);
+        if (peerConnection.iceConnectionState === 'disconnected') {
+            console.warn("Потеря связи, ожидание восстановления...");
         }
     };
 }
@@ -75,41 +89,33 @@ window.createOffer = async () => {
 
 window.processOffer = async (offerJson) => {
     if (!peerConnection) createPC();
-    const offer = new RTCSessionDescription(JSON.parse(offerJson));
-    await peerConnection.setRemoteDescription(offer);
-
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerJson)));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
-    // ВАЖНО: Добавляем кандидатов строго ПОСЛЕ setRemoteDescription
-    processQueue();
-
+    // Сразу обрабатываем накопившихся кандидатов
+    while (iceCandidatesQueue.length > 0) {
+        const cand = iceCandidatesQueue.shift();
+        await peerConnection.addIceCandidate(cand).catch(e => { });
+    }
     return JSON.stringify(answer);
 };
 
 window.processAnswer = async (ansJson) => {
-    const answer = new RTCSessionDescription(JSON.parse(ansJson));
-    await peerConnection.setRemoteDescription(answer);
-    processQueue();
-};
-
-async function processQueue() {
-    while (iceCandidatesQueue.length > 0) {
-        const cand = iceCandidatesQueue.shift();
-        try {
-            await peerConnection.addIceCandidate(cand);
-        } catch (e) {
-            console.warn("Ошибка очереди ICE:", e);
+    if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(ansJson)));
+        while (iceCandidatesQueue.length > 0) {
+            const cand = iceCandidatesQueue.shift();
+            await peerConnection.addIceCandidate(cand).catch(e => { });
         }
     }
-}
+};
 
 window.addIceCandidate = async (candJson) => {
     const candidate = new RTCIceCandidate(JSON.parse(candJson));
-    // Если дескрипшн еще не стоит — копим в очередь
     if (!peerConnection || !peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
         iceCandidatesQueue.push(candidate);
     } else {
-        await peerConnection.addIceCandidate(candidate).catch(e => console.warn(e));
+        await peerConnection.addIceCandidate(candidate).catch(e => { });
     }
 };
