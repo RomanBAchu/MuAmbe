@@ -1,80 +1,101 @@
 let localStream;
 let peerConnection;
 let dotNetHelper;
-let iceCandidatesQueue = []; // Î÷åðåäü äëÿ õðàíåíèÿ çàäåðæàííûõ êàíäèäàòîâ
-const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+let iceCandidatesQueue = [];
+
+// ÐžÐ‘ÐÐžÐ’Ð›Ð•ÐÐÐ«Ð™ ÐšÐžÐÐ¤Ð˜Ð“: Ð”Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ñ‹ TURN ÑÐµÑ€Ð²ÐµÑ€Ñ‹ Ð´Ð»Ñ Ð¾Ð±Ñ…Ð¾Ð´Ð° NAT Ð¸ Ð±Ñ€Ð°Ð½Ð´Ð¼Ð°ÑƒÑÑ€Ð¾Ð²
+const config = {
+    iceServers: [
+        {
+            urls: 'stun:stun.l.google.com:19302'
+        },
+        {
+            // Ð­Ñ‚Ð¾Ñ‚ ÑÐµÑ€Ð²ÐµÑ€ Ð¿Ð¾Ð·Ð²Ð¾Ð»Ð¸Ñ‚ Ð²Ð¸Ð´ÐµÐ¾ Ñ€Ð°Ð±Ð¾Ñ‚Ð°Ñ‚ÑŒ Ð±ÐµÐ· VPN
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
+    ]
+};
 
 window.prepareWebRTC = (helper) => {
     dotNetHelper = helper;
-    console.log("!!! WebRTC ìîñò óñòàíîâëåí !!!");
+    console.log("!!! WebRTC Ð¼Ð¾ÑÑ‚ ÑƒÑÑ‚Ð°Ð½Ð¾Ð²Ð»ÐµÐ½ !!!");
 };
 
 window.startLocalVideo = async (id) => {
-    console.log("Âêëþ÷àþ êàìåðó...");
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    document.getElementById(id).srcObject = localStream;
+    console.log("Ð’ÐºÐ»ÑŽÑ‡Ð°ÑŽ ÐºÐ°Ð¼ÐµÑ€Ñƒ...");
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById(id).srcObject = localStream;
+    } catch (err) {
+        console.error("ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ðµ Ðº ÐºÐ°Ð¼ÐµÑ€Ðµ:", err);
+    }
 };
 
 function createPC() {
-    console.log("Ñîçäàþ PeerConnection...");
+    console.log("Ð¡Ð¾Ð·Ð´Ð°ÑŽ PeerConnection Ñ TURN ÑÐµÑ€Ð²ÐµÑ€Ð°Ð¼Ð¸...");
     peerConnection = new RTCPeerConnection(config);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream)); // Äîáàâëÿåì òðåê
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    }
 
     peerConnection.onicecandidate = (e) => {
         if (e.candidate && dotNetHelper) {
-            console.log("Îòïðàâëÿþ ICE-êàíäèäàòà äðóãó...", e.candidate);
+            console.log("ÐžÑ‚Ð¿Ñ€Ð°Ð²Ð»ÑÑŽ ICE-ÐºÐ°Ð½Ð´Ð¸Ð´Ð°Ñ‚Ð°...");
             dotNetHelper.invokeMethodAsync('SendIceCandidate', JSON.stringify(e.candidate));
         }
     };
 
     peerConnection.ontrack = (e) => {
-        console.log("ÏÎËÓ×ÅÍ ÂÈÄÅÎÏÎÒÎÊ ÎÒ ÄÐÓÃÀ!", e.streams[0]);
-        document.getElementById('remoteVideo').srcObject = e.streams[0]; // Ïîêàçûâàåì ÷óæîå âèäåî
+        console.log("ÐŸÐžÐ›Ð£Ð§Ð•Ð Ð’Ð˜Ð”Ð•ÐžÐŸÐžÐ¢ÐžÐš!");
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            remoteVideo.srcObject = e.streams[0];
+        }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
-        console.log("Èçìåíèëñÿ ñòàòóñ ñîåäèíåíèÿ:", peerConnection.iceConnectionState);
-    };
-
-    peerConnection.onsignalingstatechange = () => {
-        console.log("Èçìåíèëîñü ñîñòîÿíèå ñèãíàëèçàöèè:", peerConnection.signalingState);
+        console.log("Ð¡Ñ‚Ð°Ñ‚ÑƒÑ ÑÐ¾ÐµÐ´Ð¸Ð½ÐµÐ½Ð¸Ñ:", peerConnection.iceConnectionState);
     };
 }
 
 window.createOffer = async () => {
-    if (!peerConnection) createPC(); // Ñîçäàåì ñîåäèíåíèå, åñëè îíî îòñóòñòâóåò
+    if (!peerConnection) createPC();
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
-    console.log("OFFER ÑÎÇÄÀÍ È ÎÒÏÐÀÂËÅÍ");
     return JSON.stringify(offer);
 };
 
 window.processOffer = async (offerJson) => {
-    console.log("ÏÎËÓ×ÅÍ OFFER ÎÒ ÄÐÓÃÀ, ÃÎÒÎÂËÞ ÎÒÂÅÒ...");
-    if (!peerConnection) createPC(); // Ñîçäàåì ñîåäèíåíèå, åñëè îíî îòñóòñòâóåò
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerJson))); // Ïðèìåíÿåì OFFER
+    if (!peerConnection) createPC();
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerJson)));
 
     const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer); // Óñòàíîâëèâàåì LOCAL DESCRIPTION
+    await peerConnection.setLocalDescription(answer);
 
-    // ×èñòêà î÷åðåäè ñ îòëîæåííûìè êàíäèäàòàìè
     while (iceCandidatesQueue.length > 0) {
         const cand = iceCandidatesQueue.shift();
-        await peerConnection.addIceCandidate(cand);
+        await peerConnection.addIceCandidate(cand).catch(e => console.error(e));
     }
     return JSON.stringify(answer);
 };
 
 window.processAnswer = async (ansJson) => {
-    console.log("ÏÎËÓ×ÅÍ ÎÒÂÅÒ (ANSWER), ÑÎÅÄÈÍßÞÑÜ...");
     await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(ansJson)));
 };
 
 window.addIceCandidate = async (candJson) => {
     const candidate = new RTCIceCandidate(JSON.parse(candJson));
     if (!peerConnection || !peerConnection.remoteDescription) {
-        iceCandidatesQueue.push(candidate); // Êàíäèäàò ïîìåùàåòñÿ â î÷åðåäü, åñëè ñîåäèíåíèå íå ãîòîâî
+        iceCandidatesQueue.push(candidate);
     } else {
-        await peerConnection.addIceCandidate(candidate); // Èíà÷å ñðàçó äîáàâëÿåì êàíäèäàòà
+        await peerConnection.addIceCandidate(candidate).catch(e => console.error(e));
     }
 };
