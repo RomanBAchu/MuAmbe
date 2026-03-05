@@ -19,9 +19,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Content Update="wwwroot\css\bootstrap\app.css">
+	  <Content Update="wwwroot\css\app.css">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="wwwroot\css\bootstrap\" />
 	</ItemGroup>
 
 </Project>

@@ -1,12 +1,12 @@
 let localStream;
 let peerConnection;
 let dotNetHelper;
-let iceCandidatesQueue = [];
+let iceCandidatesQueue = []; // Очередь для хранения задержанных кандидатов
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 window.prepareWebRTC = (helper) => {
     dotNetHelper = helper;
-    console.log("!!! WebRTC МОСТ УСТАНОВЛЕН !!!");
+    console.log("!!! WebRTC мост установлен !!!");
 };
 
 window.startLocalVideo = async (id) => {
@@ -18,23 +18,31 @@ window.startLocalVideo = async (id) => {
 function createPC() {
     console.log("Создаю PeerConnection...");
     peerConnection = new RTCPeerConnection(config);
-    localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream)); // Добавляем трек
 
     peerConnection.onicecandidate = (e) => {
         if (e.candidate && dotNetHelper) {
-            console.log("Отправляю ICE-кандидата другу...");
+            console.log("Отправляю ICE-кандидата другу...", e.candidate);
             dotNetHelper.invokeMethodAsync('SendIceCandidate', JSON.stringify(e.candidate));
         }
     };
 
     peerConnection.ontrack = (e) => {
-        console.log("ПОЛУЧЕН ВИДЕО-ПОТОК ОТ ДРУГА!");
-        document.getElementById('remoteVideo').srcObject = e.streams[0];
+        console.log("ПОЛУЧЕН ВИДЕОПОТОК ОТ ДРУГА!", e.streams[0]);
+        document.getElementById('remoteVideo').srcObject = e.streams[0]; // Показываем чужое видео
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log("Изменился статус соединения:", peerConnection.iceConnectionState);
+    };
+
+    peerConnection.onsignalingstatechange = () => {
+        console.log("Изменилось состояние сигнализации:", peerConnection.signalingState);
     };
 }
 
 window.createOffer = async () => {
-    if (!peerConnection) createPC();
+    if (!peerConnection) createPC(); // Создаем соединение, если оно отсутствует
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     console.log("OFFER СОЗДАН И ОТПРАВЛЕН");
@@ -43,16 +51,16 @@ window.createOffer = async () => {
 
 window.processOffer = async (offerJson) => {
     console.log("ПОЛУЧЕН OFFER ОТ ДРУГА, ГОТОВЛЮ ОТВЕТ...");
-    if (!peerConnection) createPC();
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerJson)));
+    if (!peerConnection) createPC(); // Создаем соединение, если оно отсутствует
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerJson))); // Применяем OFFER
 
     const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+    await peerConnection.setLocalDescription(answer); // Установливаем LOCAL DESCRIPTION
 
-    // Чистим очередь
-    if (iceCandidatesQueue.length > 0) {
-        iceCandidatesQueue.forEach(c => peerConnection.addIceCandidate(c));
-        iceCandidatesQueue = [];
+    // Чистка очереди с отложенными кандидатами
+    while (iceCandidatesQueue.length > 0) {
+        const cand = iceCandidatesQueue.shift();
+        await peerConnection.addIceCandidate(cand);
     }
     return JSON.stringify(answer);
 };
@@ -65,8 +73,8 @@ window.processAnswer = async (ansJson) => {
 window.addIceCandidate = async (candJson) => {
     const candidate = new RTCIceCandidate(JSON.parse(candJson));
     if (!peerConnection || !peerConnection.remoteDescription) {
-        iceCandidatesQueue.push(candidate);
+        iceCandidatesQueue.push(candidate); // Кандидат помещается в очередь, если соединение не готово
     } else {
-        await peerConnection.addIceCandidate(candidate);
+        await peerConnection.addIceCandidate(candidate); // Иначе сразу добавляем кандидата
     }
 };
