@@ -9,6 +9,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="wwwroot\css\bootstrap\**" />
+	  <Content Remove="wwwroot\css\bootstrap\**" />
+	  <EmbeddedResource Remove="wwwroot\css\bootstrap\**" />
+	  <None Remove="wwwroot\css\bootstrap\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <Content Remove="Pages\_Host.cshtml" />
 	</ItemGroup>
 
@@ -22,10 +29,6 @@
 	  <Content Update="wwwroot\css\app.css">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="wwwroot\css\bootstrap\" />
 	</ItemGroup>
 
 </Project>

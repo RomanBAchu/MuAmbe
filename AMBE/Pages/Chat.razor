@@ -1,7 +1,10 @@
-﻿@page "/chat"
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@using AMBE.Pages
+
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
-@using Microsoft.AspNetCore.Components.Web
+
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -11,9 +14,12 @@
         @foreach (var msg in messages) { <div><b>@msg.User:</b> @msg.Text</div> }
     </div>
 
-    <div class="video-grid d-flex justify-content-center gap-2 p-2">
-        <video id="localVideo" autoplay muted playsinline style="width:160px; background:black; border-radius:8px;"></video>
-        <video id="remoteVideo" autoplay playsinline style="width:160px; background:black; border-radius:8px;"></video>
+    @* Сетка на 4 видео *@
+    <div class="video-grid d-flex flex-wrap justify-content-center gap-2 p-2">
+        <video id="localVideo" autoplay muted playsinline style="width:140px; background:black; border-radius:8px;"></video>
+        <video id="remoteVideo1" autoplay playsinline style="width:140px; background:black; border-radius:8px;"></video>
+        <video id="remoteVideo2" autoplay playsinline style="width:140px; background:black; border-radius:8px;"></video>
+        <video id="remoteVideo3" autoplay playsinline style="width:140px; background:black; border-radius:8px;"></video>
     </div>
 
     <div class="text-center p-2">
@@ -30,7 +36,7 @@
 @code {
     private HubConnection? hub;
     private List<Message> messages = new();
-    private string userName = "User", newMessage = "";
+    private string userName = "Чудило", newMessage = "";
 
     protected override async Task OnInitializedAsync() {
         hub = new HubConnectionBuilder().WithUrl(Nav.ToAbsoluteUri("/chathub")).Build();
@@ -42,15 +48,14 @@
 
         hub.On<string, string>("ReceiveSignal", async (signal, senderId) => {
             if (signal.Contains("candidate")) {
-                await JS.InvokeVoidAsync("addIceCandidate", signal);
+                await JS.InvokeVoidAsync("addIceCandidate", signal, senderId);
             }
             else if (signal.Contains("offer")) {
-                await JS.InvokeVoidAsync("startLocalVideo", "localVideo");
-                var answer = await JS.InvokeAsync<string>("processOffer", signal);
+                var answer = await JS.InvokeAsync<string>("processOffer", signal, senderId);
                 await hub.SendAsync("SendSignal", answer, senderId);
             }
             else if (signal.Contains("answer")) {
-                await JS.InvokeVoidAsync("processAnswer", signal);
+                await JS.InvokeVoidAsync("processAnswer", signal, senderId);
             }
         });
 
@@ -59,9 +64,14 @@
     }
 
     private async Task StartCall() {
-        await JS.InvokeVoidAsync("startLocalVideo", "localVideo");
-        var offer = await JS.InvokeAsync<string>("createOffer");
+        // "all" говорит JS создать оферы для каждого в комнате
+        var offer = await JS.InvokeAsync<string>("createOffer", "all"); 
         if (hub != null) await hub.SendAsync("SendSignal", offer, "all");
+    }
+
+    [JSInvokable]
+    public async Task SendIceCandidate(string candidate, string targetId) {
+        if (hub != null) await hub.SendAsync("SendSignal", candidate, targetId);
     }
 
     private async Task Send() {
@@ -69,11 +79,6 @@
             await hub.SendAsync("SendMessage", userName, newMessage);
             newMessage = "";
         }
-    }
-
-    [JSInvokable]
-    public async Task SendIceCandidate(string candidate) {
-        if (hub != null) await hub.SendAsync("SendSignal", candidate, "all");
     }
 
     private async Task HandleKeyPress(KeyboardEventArgs e) { if (e.Key == "Enter") await Send(); }
