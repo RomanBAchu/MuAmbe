@@ -1,131 +1,68 @@
 let localStream;
-let peerConnections = {};
+let peerConnection;
 let dotNetHelper;
-<<<<<<< Updated upstream
-=======
 let iceCandidatesQueue = [];
 
-// Œ¡ÕŒ¬À≈ÕÕ€…  ŒÕ‘»√: ƒÓ·‡‚ÎˇÂÏ TURN-ÒÂ‚Â (Metered ó Ó‰ËÌ ËÁ ÎÛ˜¯Ëı ·ÂÒÔÎ‡ÚÌ˚ı)
+// –û–ë–ù–û–í–õ–ï–ù–ù–´–ô –ö–û–ù–§–ò–ì: –î–æ–±–∞–≤–ª–µ–Ω—ã TURN —Å–µ—Ä–≤–µ—Ä—ã –¥–ª—è –æ–±—Ö–æ–¥–∞ NAT –∏ –±—Ä–∞–Ω–¥–º–∞—É—ç—Ä–æ–≤
 const config = {
     iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
         {
-            // ›ÚÓÚ ÒÂ‚Â ‡·ÓÚ‡ÂÚ ˜ÂÂÁ ÔÓÚ 443 (Í‡Í Ó·˚˜Ì˚È Ò‡ÈÚ), Â„Ó ÔÓ‚‡È‰Â˚ ÌÂ ·ÎÓ˜‡Ú
-            urls: ['turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+            urls: 'stun:stun.l.google.com:19302'
+        },
+        {
+            // –≠—Ç–æ—Ç —Å–µ—Ä–≤–µ—Ä –ø–æ–∑–≤–æ–ª–∏—Ç –≤–∏–¥–µ–æ —Ä–∞–±–æ—Ç–∞—Ç—å –±–µ–∑ VPN
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
             username: 'openrelayproject',
             credential: 'openrelayproject'
         }
-    ],
-    iceCandidatePoolSize: 10 // ”ÒÍÓˇÂÚ Ò·Ó Í‡Ì‰Ë‰‡ÚÓ‚ ‰Îˇ Ò‚ˇÁË ·ÂÁ VPN
-};
->>>>>>> Stashed changes
-
-const config = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-            urls: ['turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
-            username: 'openrelayproject', credential: 'openrelayproject'
-        }
-    ],
-    iceCandidatePoolSize: 10
+    ]
 };
 
-window.prepareWebRTC = async (helper) => {
+window.prepareWebRTC = (helper) => {
     dotNetHelper = helper;
+    console.log("!!! WebRTC –º–æ—Å—Ç —É—Å—Ç–∞–Ω–æ–≤–ª–µ–Ω !!!");
+};
+
+window.startLocalVideo = async (id) => {
+    console.log("–í–∫–ª—é—á–∞—é –∫–∞–º–µ—Ä—É...");
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('localVideo').srcObject = localStream;
-    } catch (e) { console.error("Camera error:", e); }
+        document.getElementById(id).srcObject = localStream;
+    } catch (err) {
+        console.error("–û—à–∏–±–∫–∞ –ø—Ä–∏ –¥–æ—Å—Ç—É–ø–µ –∫ –∫–∞–º–µ—Ä–µ:", err);
+    }
 };
 
-function createPC(remoteId) {
-    if (peerConnections[remoteId]) return peerConnections[remoteId];
-
-<<<<<<< Updated upstream
-    const pc = new RTCPeerConnection(config);
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-=======
 function createPC() {
-    console.log("—ÓÁ‰‡˛ PeerConnection...");
+    console.log("–°–æ–∑–¥–∞—é PeerConnection —Å TURN —Å–µ—Ä–≤–µ—Ä–∞–º–∏...");
     peerConnection = new RTCPeerConnection(config);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
->>>>>>> Stashed changes
 
-    pc.onicecandidate = (e) => {
+    if (localStream) {
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    }
+
+    peerConnection.onicecandidate = (e) => {
         if (e.candidate && dotNetHelper) {
-<<<<<<< Updated upstream
-            dotNetHelper.invokeMethodAsync('SendIceCandidate', JSON.stringify(e.candidate), remoteId);
-        }
-    };
-
-    pc.ontrack = (e) => {
-        for (let i = 1; i <= 3; i++) {
-            let videoEl = document.getElementById(`remoteVideo${i}`);
-            if (videoEl && (!videoEl.srcObject || videoEl.getAttribute("data-id") === remoteId)) {
-                videoEl.srcObject = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
-                videoEl.setAttribute("data-id", remoteId);
-                break;
-            }
-        }
-    };
-
-    peerConnections[remoteId] = pc;
-    return pc;
-}
-
-window.createOffer = async (remoteId) => {
-    const pc = createPC(remoteId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    return JSON.stringify(offer);
-};
-
-window.processOffer = async (offerJson, remoteId) => {
-    const pc = createPC(remoteId);
-    await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerJson)));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    return JSON.stringify(answer);
-};
-
-window.processAnswer = async (ansJson, remoteId) => {
-    const pc = peerConnections[remoteId];
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(ansJson)));
-};
-
-window.addIceCandidate = async (candJson, remoteId) => {
-    const pc = peerConnections[remoteId];
-    if (!pc) return;
-    try {
-        const candidate = JSON.parse(candJson);
-        if (!candidate || (!candidate.candidate && candidate.sdpMid === null)) return;
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (e) { }
-};
-
-window.hangUp = () => {
-    for (let id in peerConnections) { peerConnections[id].close(); delete peerConnections[id]; }
-    for (let i = 1; i <= 3; i++) {
-        let v = document.getElementById(`remoteVideo${i}`);
-        if (v) { v.srcObject = null; v.removeAttribute("data-id"); }
-=======
-            console.log("ŒÚÔ‡‚Îˇ˛ ICE-Í‡Ì‰Ë‰‡Ú‡...");
+            console.log("–û—Ç–ø—Ä–∞–≤–ª—è—é ICE-–∫–∞–Ω–¥–∏–¥–∞—Ç–∞...");
             dotNetHelper.invokeMethodAsync('SendIceCandidate', JSON.stringify(e.candidate));
         }
     };
 
     peerConnection.ontrack = (e) => {
-        console.log("œŒÀ”◊≈Õ ¬»ƒ≈ŒœŒ“Œ !");
-        // ‘ËÍÒ ‰Îˇ Safari/iOS: ËÒÔÓÎ¸ÁÛÂÏ streams[0] ËÎË ÒÓÁ‰‡ÂÏ ÔÓÚÓÍ ËÁ ÚÂÍ‡
+        console.log("–ü–û–õ–£–ß–ï–ù –í–ò–î–ï–û–ü–û–¢–û–ö!");
         const remoteVideo = document.getElementById('remoteVideo');
-        if (e.streams && e.streams[0]) {
+        if (remoteVideo) {
             remoteVideo.srcObject = e.streams[0];
-        } else {
-            remoteVideo.srcObject = new MediaStream([e.track]);
         }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log("–°—Ç–∞—Ç—É—Å —Å–æ–µ–¥–∏–Ω–µ–Ω–∏—è:", peerConnection.iceConnectionState);
     };
 }
 
@@ -145,7 +82,7 @@ window.processOffer = async (offerJson) => {
 
     while (iceCandidatesQueue.length > 0) {
         const cand = iceCandidatesQueue.shift();
-        await peerConnection.addIceCandidate(cand);
+        await peerConnection.addIceCandidate(cand).catch(e => console.error(e));
     }
     return JSON.stringify(answer);
 };
@@ -155,18 +92,10 @@ window.processAnswer = async (ansJson) => {
 };
 
 window.addIceCandidate = async (candJson) => {
-    const candidateData = JSON.parse(candJson);
-
-    // ¬‡ÊÌÓ: Ë„ÌÓËÛÂÏ ÔÛÒÚ˚Â Í‡Ì‰Ë‰‡Ú˚ (ÍÓÌÂˆ ÒÔËÒÍ‡), ˜ÚÓ·˚ ÌÂ ·˚ÎÓ Ó¯Ë·ÓÍ ‚ ÍÓÌÒÓÎË
-    if (!candidateData || (!candidateData.candidate && candidateData.sdpMid === null)) return;
-
-    const candidate = new RTCIceCandidate(candidateData);
+    const candidate = new RTCIceCandidate(JSON.parse(candJson));
     if (!peerConnection || !peerConnection.remoteDescription) {
         iceCandidatesQueue.push(candidate);
     } else {
-        try {
-            await peerConnection.addIceCandidate(candidate);
-        } catch (e) { console.warn("Œ¯Ë·Í‡ ‰Ó·‡‚ÎÂÌËˇ Í‡Ì‰Ë‰‡Ú‡", e); }
->>>>>>> Stashed changes
+        await peerConnection.addIceCandidate(candidate).catch(e => console.error(e));
     }
 };

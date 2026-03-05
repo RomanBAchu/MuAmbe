@@ -1,6 +1,4 @@
-@using AMBE.Pages
 @using Microsoft.AspNetCore.Components.Web
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -8,16 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AMBE Messenger</title>
     <base href="/" />
-    
-    <link rel="stylesheet" href="css/app.css" />
+    @* Добавляем слэш в начале, чтобы сервер всегда находил файлы *@
+    <link rel="stylesheet" href="/css/app.css" />
+   
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
 </head>
-<body style="background: #e5ddd5; font-family: sans-serif;">
-
-    @* Вызываем чат напрямую. Рендермод ОБЯЗАТЕЛЕН тут *@
-    <Chat @rendermode="new InteractiveServerRenderMode(prerender: false)" />
-
+<body>
+    <Routes /> 
+    
     <script src="_framework/blazor.web.js"></script>
-    <script src="js/webrtc.js"></script>
+    @* Сюда мы потом вставим скрипт для видеозвонков (WebRTC) *@
+    <script src="/js/webrtc.js"></script>
+    
 </body>
 </html>
