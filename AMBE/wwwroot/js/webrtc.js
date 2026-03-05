@@ -3,30 +3,29 @@ let peerConnection;
 let dotNetHelper;
 let iceCandidatesQueue = [];
 
-// Улучшенный конфиг для пробития блокировок провайдеров без VPN
+// ОБНОВЛЕННЫЙ КОНФИГ С ТВОИМИ ЛИЧНЫМИ КЛЮЧАМИ METERED
 const config = {
     iceServers: [
         {
             urls: 'stun:stun.l.google.com:19302'
         },
         {
-            // Принудительный TCP на 443 порту — самый надежный способ обхода NAT
+            urls: 'stun:openrelay.metered.ca:80'
+        },
+        {
+            // Твой личный TURN сервер (TCP режим - самый стабильный)
             urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            username: '2e7e778f6d1b07b279414c2d',
+            credential: 'MOO2Lssrfa/+i8LI'
         },
         {
+            // Твой личный TURN сервер (UDP режим)
             urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            username: '2e7e778f6d1b07b279414c2d',
+            credential: 'MOO2Lssrfa/+i8LI'
         }
     ],
-    iceCandidatePoolSize: 10 // Подготавливает пути заранее, чтобы не было дисконнекта
+    iceCandidatePoolSize: 10
 };
 
 window.prepareWebRTC = (helper) => {
@@ -46,7 +45,7 @@ window.startLocalVideo = async (id) => {
 };
 
 function createPC() {
-    console.log("Создаю PeerConnection (защищенный режим)...");
+    console.log("Создаю PeerConnection (авторизованный TURN)...");
     peerConnection = new RTCPeerConnection(config);
 
     if (localStream) {
@@ -70,10 +69,6 @@ function createPC() {
 
     peerConnection.oniceconnectionstatechange = () => {
         console.log("Статус соединения:", peerConnection.iceConnectionState);
-        // Если соединение упало, пытаемся восстановить (опционально)
-        if (peerConnection.iceConnectionState === 'failed') {
-            console.warn("Соединение не удалось. Проверьте сеть.");
-        }
     };
 }
 
@@ -91,7 +86,6 @@ window.processOffer = async (offerJson) => {
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
-    // Обработка накопившихся кандидатов
     while (iceCandidatesQueue.length > 0) {
         const cand = iceCandidatesQueue.shift();
         await peerConnection.addIceCandidate(cand).catch(e => console.warn("Ошибка кандидата:", e));
