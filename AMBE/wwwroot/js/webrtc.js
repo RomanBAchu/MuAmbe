@@ -3,14 +3,19 @@ let peerConnection;
 let dotNetHelper;
 let iceCandidatesQueue = [];
 
-// ОБНОВЛЕННЫЙ КОНФИГ: Добавлены TURN серверы для обхода NAT и брандмауэров
+// Улучшенный конфиг для пробития блокировок провайдеров без VPN
 const config = {
     iceServers: [
         {
             urls: 'stun:stun.l.google.com:19302'
         },
         {
-            // Этот сервер позволит видео работать без VPN
+            // Принудительный TCP на 443 порту — самый надежный способ обхода NAT
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
             urls: 'turn:openrelay.metered.ca:443',
             username: 'openrelayproject',
             credential: 'openrelayproject'
@@ -20,7 +25,8 @@ const config = {
             username: 'openrelayproject',
             credential: 'openrelayproject'
         }
-    ]
+    ],
+    iceCandidatePoolSize: 10 // Подготавливает пути заранее, чтобы не было дисконнекта
 };
 
 window.prepareWebRTC = (helper) => {
@@ -32,14 +38,15 @@ window.startLocalVideo = async (id) => {
     console.log("Включаю камеру...");
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById(id).srcObject = localStream;
+        const videoElem = document.getElementById(id);
+        if (videoElem) videoElem.srcObject = localStream;
     } catch (err) {
         console.error("Ошибка при доступе к камере:", err);
     }
 };
 
 function createPC() {
-    console.log("Создаю PeerConnection с TURN серверами...");
+    console.log("Создаю PeerConnection (защищенный режим)...");
     peerConnection = new RTCPeerConnection(config);
 
     if (localStream) {
@@ -54,15 +61,19 @@ function createPC() {
     };
 
     peerConnection.ontrack = (e) => {
-        console.log("ПОЛУЧЕН ВИДЕОПОТОК!");
+        console.log("ПОЛУЧЕН ВИДЕОПОТОК ОТ ПАРТНЕРА!");
         const remoteVideo = document.getElementById('remoteVideo');
-        if (remoteVideo) {
+        if (remoteVideo && e.streams[0]) {
             remoteVideo.srcObject = e.streams[0];
         }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
         console.log("Статус соединения:", peerConnection.iceConnectionState);
+        // Если соединение упало, пытаемся восстановить (опционально)
+        if (peerConnection.iceConnectionState === 'failed') {
+            console.warn("Соединение не удалось. Проверьте сеть.");
+        }
     };
 }
 
@@ -80,15 +91,18 @@ window.processOffer = async (offerJson) => {
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
+    // Обработка накопившихся кандидатов
     while (iceCandidatesQueue.length > 0) {
         const cand = iceCandidatesQueue.shift();
-        await peerConnection.addIceCandidate(cand).catch(e => console.error(e));
+        await peerConnection.addIceCandidate(cand).catch(e => console.warn("Ошибка кандидата:", e));
     }
     return JSON.stringify(answer);
 };
 
 window.processAnswer = async (ansJson) => {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(ansJson)));
+    if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(ansJson)));
+    }
 };
 
 window.addIceCandidate = async (candJson) => {
@@ -96,6 +110,6 @@ window.addIceCandidate = async (candJson) => {
     if (!peerConnection || !peerConnection.remoteDescription) {
         iceCandidatesQueue.push(candidate);
     } else {
-        await peerConnection.addIceCandidate(candidate).catch(e => console.error(e));
+        await peerConnection.addIceCandidate(candidate).catch(e => console.warn("Ошибка кандидата:", e));
     }
 };
