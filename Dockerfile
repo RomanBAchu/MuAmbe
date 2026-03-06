@@ -1,29 +1,30 @@
-# См. статью по ссылке https://aka.ms/customizecontainer, чтобы узнать как настроить контейнер отладки и как Visual Studio использует этот Dockerfile для создания образов для ускорения отладки.
-
-# Этот этап используется при запуске из VS в быстром режиме (по умолчанию для конфигурации отладки)
+# 1. Базовый образ для запуска
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-USER $APP_UID
 WORKDIR /app
+# Render ожидает, что приложение слушает порт, мы фиксируем 8080
 EXPOSE 8080
-EXPOSE 8081
+ENV ASPNETCORE_URLS=http://+:8080
+# Добавляем поддержку прокси Render для SignalR и HTTPS
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 
-
-# Этот этап используется для сборки проекта службы
+# 2. Образ для сборки
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+# Копируем файл проекта и восстанавливаем зависимости
 COPY ["AMBE/AMBE.csproj", "AMBE/"]
-RUN dotnet restore "./AMBE/AMBE.csproj"
+RUN dotnet restore "AMBE/AMBE.csproj"
+# Копируем всё остальное и собираем
 COPY . .
 WORKDIR "/src/AMBE"
-RUN dotnet build "./AMBE.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "AMBE.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
-# Этот этап используется для публикации проекта службы, который будет скопирован на последний этап
+# 3. Публикация приложения
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./AMBE.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "AMBE.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-# Этот этап используется в рабочей среде или при запуске из VS в обычном режиме (по умолчанию, когда конфигурация отладки не используется)
+# 4. Финальный образ
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
