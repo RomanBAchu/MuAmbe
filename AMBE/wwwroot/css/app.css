@@ -1,56 +1,30 @@
-/* spider-man-ps5.css - FINAL STABLE VERSION */
+/* spider-man-ps5.css */
 :root {
     --spidey-red: #e62429;
-    --spidey-blue: #0096FF;
     --spidey-glass: rgba(18, 18, 18, 0.85);
     --text-white: #ffffff;
 }
 
-/* КОНТЕЙНЕР ДЛЯ ВСЕХ ВИДЕО (HUD) */
-.remote-mesh-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 10px;
-    justify-content: center;
-    align-items: flex-start; /* Начинаем сверху */
-    /* СКРОЛЛИНГ: Если видео много - появится прокрутка */
-    overflow-y: auto;
-    max-height: 100%;
-}
-
-    /* Красивый красный скроллбар для зоны видео */
-    .remote-mesh-container::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    .remote-mesh-container::-webkit-scrollbar-thumb {
-        background: var(--spidey-red);
-        border-radius: 10px;
-    }
-
-/* ТВОЙ КРУЖОК (ЛЕВЫЙ УГОЛ) */
+/* ТВОЙ КРУЖОК (ВОЗВРАЩЕНО) */
 #localVideo {
-    width: 90px;
-    height: 90px;
+    width: 100px;
+    height: 100px;
     object-fit: cover;
     border-radius: 50%;
     border: 2px solid var(--spidey-red);
     box-shadow: 0 0 15px var(--spidey-red);
 }
 
-/* ВИДЕО СОБЕСЕДНИКА - МАКСИМАЛЬНО БОЛЬШОЕ (ПЛИТКА) */
+/* ВИДЕО СОБЕСЕДНИКА - МАКСИМАЛЬНО БОЛЬШОЕ */
 .remote-v-container {
-    flex: 1 1 300px; /* Плитки будут стараться быть по 300px в ширину */
+    width: 100%;
     max-width: 100%;
     aspect-ratio: 16 / 9;
     background: #000;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
     overflow: hidden;
-    position: relative;
+    margin-bottom: 15px;
 }
 
     .remote-v-container video {
@@ -61,20 +35,14 @@
 
 /* Кнопка ОТПРАВИТЬ */
 .s-btn-send {
-    background-color: var(--spidey-blue) !important;
+    background-color: #0096FF !important;
     border: none !important;
     color: white;
     font-weight: bold;
     text-transform: uppercase;
-    padding: 10px 15px; /* Увеличил отступы для удобства */
+    padding: 0 15px;
     border-radius: 8px;
-    transition: 0.2s;
 }
-
-    .s-btn-send:active {
-        transform: scale(0.95);
-        box-shadow: 0 0 10px var(--spidey-blue);
-    }
 
 /* Кнопка Камеры */
 .cam-btn {
@@ -85,18 +53,4 @@
     border-radius: 20px;
     font-size: 0.7rem;
     margin-bottom: 5px;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-/* Адаптация под мелкие экраны */
-@media (max-width: 480px) {
-    .remote-v-container {
-        flex: 1 1 100%; /* На узких телефонах видео будет на всю ширину */
-    }
-
-    #localVideo {
-        width: 70px;
-        height: 70px;
-    }
 }

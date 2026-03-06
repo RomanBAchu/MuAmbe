@@ -1,4 +1,3 @@
-/* webrtc.js - ULTRA STABLE EDITION */
 let localStream;
 let pcs = {};
 let dotNetHelper;
@@ -33,42 +32,16 @@ window.scrollToEnd = (id) => {
     if (el) el.scrollTop = el.scrollHeight;
 };
 
-// УМНЫЙ ЗАХВАТ: Работает даже если НЕТ камеры и НЕТ микрофона
 window.startLocalVideo = async (id) => {
-    if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        localStream = null;
-    }
-
-    const constraints = [
-        { video: { width: 320, height: 240, frameRate: 15 }, audio: true }, // Видео + Звук
-        { video: { width: 320, height: 240, frameRate: 15 }, audio: false }, // Только Видео
-        { video: false, audio: true }, // Только Звук
-        { video: false, audio: false } // Ничего (пустой поток)
-    ];
-
-    for (let constraint of constraints) {
-        try {
-            // Если дошли до последнего варианта (false/false), создаем пустой поток вручную
-            if (!constraint.video && !constraint.audio) {
-                localStream = new MediaStream();
-                console.log("Трансляция без медиа устройств");
-                break;
-            }
-            localStream = await navigator.mediaDevices.getUserMedia(constraint);
-            console.log("Устройства захвачены:", constraint);
-            break;
-        } catch (e) {
-            console.warn("Вариант не подошел, пробую следующий...", constraint);
-        }
-    }
-
-    const v = document.getElementById(id);
-    if (v && localStream) {
-        v.srcObject = localStream;
-        v.style.objectFit = "cover";
-    }
-    return true; // Всегда возвращаем true, чтобы трансляция началась в любом случае
+    try {
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 320, height: 240, frameRate: 15 },
+            audio: true
+        });
+        document.getElementById(id).srcObject = localStream;
+        return true;
+    } catch (e) { return false; }
 };
 
 function getOrCreatePC(remoteId) {
@@ -92,17 +65,13 @@ function getOrCreatePC(remoteId) {
         if (!vSlot) {
             vSlot = document.createElement("div");
             vSlot.id = "slot_" + remoteId;
-            vSlot.style = "flex: 1 1 300px; max-width: 100%; aspect-ratio: 16/9; background: #000; border: 1px solid #e62429; border-radius: 12px; overflow: hidden; position: relative;";
+            // ДРУГИЕ КЛИЕНТЫ: Большие прямоугольные окна
+            vSlot.style = "flex: 1 1 200px; max-width: 100%; aspect-ratio: 16/9; background: #000; border: 1px solid #e62429; border-radius: 8px; overflow: hidden; position: relative;";
             vSlot.innerHTML = `<video id="video_${remoteId}" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`;
             container.appendChild(vSlot);
         }
-        document.getElementById("video_" + remoteId).srcObject = e.streams;
+        document.getElementById("video_" + remoteId).srcObject = e.streams[0];
     };
-
-    pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === 'failed') pc.restartIce();
-    };
-
     return pc;
 }
 
@@ -136,6 +105,5 @@ window.removeUser = (id) => {
 window.hangup = () => {
     Object.keys(pcs).forEach(id => window.removeUser(id));
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    const lv = document.getElementById('localVideo');
-    if (lv) lv.srcObject = null;
+    document.getElementById('localVideo').srcObject = null;
 };

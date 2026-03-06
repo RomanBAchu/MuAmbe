@@ -7,6 +7,7 @@
 
 <div class="spidey-viewport">
     @* ВЕРХНИЙ HUD (ВИДЕО) *@
+    @* Измени % в .expanded ниже в стилях, чтобы двигать красную полосу *@
     <div class="video-hub @(_inCall ? "expanded" : "collapsed")">
         <div class="hud-scanner"></div>
         
@@ -63,6 +64,8 @@
 
     .video-hub { background: radial-gradient(circle, #222 0%, #000 100%); border-bottom: 2px solid var(--red); transition: height 0.5s ease; position: relative; overflow: hidden; }
     .collapsed { height: 60px; }
+    
+    /* РЕГУЛИРОВКА ВЫСОТЫ ВИДЕО: уменьши до 30%, если хочешь еще больше места для чата */
     .expanded { height: 60%; } 
 
     .local { position: absolute; bottom: 15px; left: 15px; width: 90px; height: 90px; z-index: 100; }
@@ -74,8 +77,20 @@
 
     .remote-mesh-container { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px; height: 100%; width: 100%; align-items: center; justify-content: center; }
 
-    .spidey-chat-area { flex: 1; overflow-y: auto; padding: 10px; background: rgba(255,255,255,0.03); display: flex; flex-direction: column; gap: 4px; }
-    .spidey-msg { background: rgba(255, 255, 255, 0.05); padding: 4px 12px; border-radius: 20px; border-left: 2px solid var(--red); }
+    /* ЧАТ - УПЛОТНЕННЫЕ ОТСТУПЫ */
+    .spidey-chat-area { 
+        flex: 1; overflow-y: auto; padding: 10px; 
+        background: rgba(255,255,255,0.03); display: flex; flex-direction: column; 
+        gap: 4px; /* Расстояние МЕЖДУ сообщениями */
+    }
+
+    .spidey-msg { 
+        background: rgba(255, 255, 255, 0.05); 
+        padding: 4px 12px; /* Уплотненный текст внутри */
+        border-radius: 20px; /* Твои скругления */
+        border-left: 2px solid var(--red); 
+    }
+
     .spidey-msg .u { color: var(--red); font-size: 10px; font-weight: bold; display: block; margin-bottom: -1px; }
     .spidey-msg .t { font-size: 0.85rem; line-height: 1.2; }
     .sys { border-left-color: var(--blue); opacity: 0.6; }
@@ -84,7 +99,9 @@
     .s-input { background: #222; border: 1px solid #444; color: #fff; border-radius: 8px; padding: 8px 10px; }
     .id-field { width: 80px; text-align: center; color: var(--red); font-weight: bold; }
     .text-field { flex: 1; }
+    
     .s-btn-send { background: var(--blue); border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-weight: bold; font-size: 12px; }
+    
     .s-btn-call { background: var(--red); border: none; color: #fff; width: 100%; padding: 12px; border-radius: 25px; font-weight: bold; box-shadow: var(--glow); }
     .s-btn-hangup { background: transparent; border: 2px solid var(--red); color: #fff; width: 100%; padding: 10px; border-radius: 25px; }
 
@@ -147,9 +164,8 @@
     }
 
     private async Task JoinCall() {
-        // Вызываем JS, который вернет true даже при отсутствии камеры
-        await JS.InvokeVoidAsync("startLocalVideo", "localVideo");
-        if (hub != null) {
+        var ok = await JS.InvokeAsync<bool>("startLocalVideo", "localVideo");
+        if (ok && hub != null) {
             _inCall = true;
             _isCamOn = true;
             await hub.SendAsync("SendMessage", "Система", userName + " В ЭФИРЕ");
@@ -173,7 +189,6 @@
     private async Task HandleKeyPress(KeyboardEventArgs e) { if (e.Key == "Enter") await Send(); }
 
     [JSInvokable] public async Task SendSignalJS(string s, string t) { if (hub != null) await hub.SendAsync("SendSignal", s, t); }
-    
     public async ValueTask DisposeAsync() { if (hub != null) await hub.DisposeAsync(); }
     public class Message { public string User { get; set; } = ""; public string Text { get; set; } = ""; }
 }
