@@ -6,24 +6,21 @@
 @implements IAsyncDisposable
 
 <div class="spidey-viewport">
-    @* ВЕРХНИЙ HUD (ВИДЕО) *@
+    
     <div class="video-hub @(_inCall ? "expanded" : "collapsed")">
         <div class="hud-scanner"></div>
+        <div class="hud-header-mini">AMBE // @(_isVideoEnabled ? "VIDEO_FEED" : "VOICE_ONLY")</div>
         <div class="video-mesh">
             <div class="v-slot local">
-                <video id="localVideo" autoplay muted playsinline></video>
+                <video id="localVideo" autoplay muted playsinline class="@(_isVideoEnabled ? "" : "d-none")"></video>
+                <div class="v-avatar @(_isVideoEnabled ? "d-none" : "d-flex")">@userName[0]</div>
                 <div class="v-badge">YOU</div>
             </div>
-            <div id="remoteVideos" class="remote-mesh-container">
-                @* Сюда JS вставляет крупные плитки *@
-            </div>
+            <div id="remoteVideos" class="remote-mesh-container"></div>
         </div>
-        @if (_inCall) {
-            <div class="v-footer">● FNSM_SECURE_LINK // ACTIVE</div>
-        }
     </div>
 
-    @* СРЕДНИЙ БЛОК (ЧАТ) *@
+ 
     <div id="msgList" class="spidey-chat-area">
         @foreach (var msg in messages) { 
             <div class="spidey-msg @(msg.User == "Система" ? "sys" : "")">
@@ -33,16 +30,19 @@
         }
     </div>
 
-    @* НИЖНИЙ БЛОК (УПРАВЛЕНИЕ) *@
+   
     <div class="spidey-nav">
         <div class="input-container d-flex gap-2">
-            <input @bind="userName" class="s-input id-field" />
-            <input @bind="newMessage" @onkeyup="HandleKeyPress" class="s-input text-field" placeholder="DATA_INPUT..." />
-            <button class="s-btn-send" @onclick="Send">►</button>
+            <input @bind="userName" class="s-input id-field" maxlength="10" />
+            <input @bind="newMessage" @onkeyup="HandleKeyPress" class="s-input text-field" placeholder="Сообщение..." />
+            <button class="s-btn-send-large" @onclick="Send">ОТПРАВИТЬ</button>
         </div>
-        <div class="call-action mt-2">
+        <div class="call-action-grid mt-2">
             @if (!_inCall) {
-                <button class="s-btn-call" @onclick="JoinCall">📞 СТАРТ ТРАНСЛЯЦИИ</button>
+                <div class="d-flex gap-2">
+                    <button class="s-btn-call v-mode w-50" @onclick="() => JoinCall(true)">🎥 ВИДЕО</button>
+                    <button class="s-btn-call a-mode w-50" @onclick="() => JoinCall(false)">🎙 ГОЛОС</button>
+                </div>
             } else {
                 <button class="s-btn-hangup" @onclick="LeaveCall">🚫 ОБОРВАТЬ СВЯЗЬ</button>
             }
@@ -52,55 +52,44 @@
 
 <style>
     :root { --red: #e62429; --blue: #0096FF; --glow: 0 0 15px rgba(230,36,41,0.5); }
-    
-    .spidey-viewport { 
-        display: flex; flex-direction: column; height: 100dvh; 
-        background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden;
-    }
+    .spidey-viewport { display: flex; flex-direction: column; height: 100dvh; background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
 
-    /* ВИДЕО - ТЕПЕРЬ ГЛАВНОЕ */
-    .video-hub { 
-        background: radial-gradient(circle, #222 0%, #000 100%);
-        border-bottom: 2px solid var(--red);
-        transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative; overflow: hidden;
-    }
-    .collapsed { height: 60px; }
-    .expanded { height: 55%; } /* Занимает больше половины экрана */
+    /* ВИДЕО - 50% */
+    .video-hub { background: radial-gradient(circle, #1a1a2e 0%, #000 100%); border-bottom: 2px solid var(--red); transition: height 0.4s ease; position: relative; overflow: hidden; }
+    .collapsed { height: 45px; }
+    .expanded { height: 50%; } 
 
-    .video-mesh { 
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
-        gap: 10px; padding: 15px; height: 100%; align-content: center;
-    }
+    .video-mesh { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; padding: 15px; height: 100%; align-content: center; }
+    .v-slot video { width: 100%; height: 100%; max-height: 200px; object-fit: cover; border: 2px solid var(--red); border-radius: 15px; box-shadow: var(--glow); }
+    .local { position: relative; max-width: 150px; margin: 0 auto; }
+    .v-avatar { width: 100%; height: 120px; background: #222; border-radius: 15px; border: 2px solid var(--red); align-items: center; justify-content: center; font-size: 3rem; color: var(--red); font-weight: bold; }
+    .v-badge { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); background: var(--red); font-size: 0.5rem; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
 
-    .v-slot video { 
-        width: 100%; height: 100%; max-height: 180px; object-fit: cover;
-        border: 1px solid var(--red); border-radius: 12px; box-shadow: var(--glow);
-    }
-    .local { position: relative; max-width: 160px; margin: 0 auto; }
-    .v-badge { position: absolute; top: 10px; left: 10px; background: var(--red); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .remote-mesh-container { display: contents; }
+    /* Каждое видео из JS получает класс remote-v */
+    .remote-v { width: 100%; height: 100%; min-height: 150px; object-fit: cover; border: 2px solid var(--blue); border-radius: 15px; background: #000; }
 
-    /* ЧАТ - ТЕПЕРЬ ПОД ВИДЕО */
-    .spidey-chat-area { 
-        flex: 1; overflow-y: auto; padding: 15px; 
-        background: rgba(255,255,255,0.03); display: flex; flex-direction: column; gap: 8px;
-    }
-    .spidey-msg { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; border-left: 2px solid var(--red); }
-    .spidey-msg .u { color: var(--red); font-size: 0.65rem; font-weight: bold; display: block; }
+    /* ЧАТ */
+    .spidey-chat-area { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .spidey-msg { background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 4px; border-left: 3px solid var(--red); }
+    .spidey-msg .u { color: var(--red); font-size: 0.6rem; font-weight: bold; display: block; }
     .spidey-msg .t { font-size: 0.85rem; }
-    .sys { border-left-color: var(--blue); opacity: 0.6; }
+    .sys { border-left-color: var(--blue); }
 
-    /* УПРАВЛЕНИЕ - ВСЕГДА ВНИЗУ */
-    .spidey-nav { background: #111; padding: 15px; border-top: 1px solid #333; padding-bottom: calc(15px + env(safe-area-inset-bottom)); }
-    .s-input { background: #222; border: 1px solid #444; color: #fff; border-radius: 8px; padding: 10px; font-size: 0.9rem; }
-    .id-field { width: 70px; text-align: center; color: var(--red); font-weight: bold; }
+    /* ПАНЕЛЬ УПРАВЛЕНИЯ */
+    .spidey-nav { background: #0a0a0a; padding: 12px; border-top: 1px solid #333; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+    .s-input { background: #1a1a1a; border: 1px solid #444; color: #fff; border-radius: 10px; padding: 12px; }
+    .id-field { width: 80px; text-align: center; color: var(--red); font-weight: bold; }
     .text-field { flex: 1; }
-    .s-btn-send { background: var(--blue); border: none; color: #fff; width: 50px; border-radius: 8px; }
+    .s-btn-send-large { background: var(--blue); border: none; color: #fff; padding: 0 15px; border-radius: 10px; font-weight: bold; font-size: 0.7rem; }
     
-    .s-btn-call { background: var(--red); border: none; color: #fff; width: 100%; padding: 12px; border-radius: 25px; font-weight: bold; box-shadow: var(--glow); margin-top: 5px; }
-    .s-btn-hangup { background: transparent; border: 2px solid var(--red); color: #fff; width: 100%; padding: 10px; border-radius: 25px; margin-top: 5px; }
+    .s-btn-call { color: #fff; padding: 14px; border-radius: 30px; font-weight: bold; border: none; font-size: 0.9rem; }
+    .v-mode { background: var(--red); box-shadow: var(--glow); }
+    .a-mode { background: #333; border: 1px solid var(--red); }
+    .s-btn-hangup { background: transparent; border: 2px solid var(--red); color: #fff; width: 100%; padding: 12px; border-radius: 30px; font-weight: bold; }
 
-    .hud-scanner { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: rgba(255,255,255,0.1); animation: scan 3s infinite linear; }
+    .hud-header-mini { position: absolute; top: 5px; left: 15px; font-size: 0.6rem; color: var(--red); font-weight: bold; z-index: 5; }
+    .hud-scanner { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: rgba(230,36,41,0.2); animation: scan 3s infinite linear; pointer-events: none; }
     @@keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
 </style>
 
@@ -109,15 +98,14 @@
     private List<Message> messages = new();
     private string userName = "Чудило", newMessage = "";
     private bool _inCall = false;
+    private bool _isVideoEnabled = true;
 
     protected override async Task OnInitializedAsync() {
         hub = new HubConnectionBuilder().WithUrl(Nav.ToAbsoluteUri("/chathub")).WithAutomaticReconnect().Build();
 
         hub.On<string, string>("ReceiveMessage", (u, t) => InvokeAsync(async () => {
             messages.Add(new Message { User = u, Text = t });
-            if (u != userName && u != "Система") {
-                await JS.InvokeVoidAsync("spideyVibrate", new int[] { 100, 50, 100 });
-            }
+            if (u != userName) await JS.InvokeVoidAsync("spideyVibrate", new int[] { 100, 50, 100 });
             StateHasChanged();
             await JS.InvokeVoidAsync("scrollToEnd", "msgList");
         }));
@@ -150,17 +138,17 @@
         });
 
         hub.On<string>("UserLeft", id => JS.InvokeVoidAsync("removeUser", id));
-
         await hub.StartAsync();
         await JS.InvokeVoidAsync("prepareWebRTC", DotNetObjectReference.Create(this));
     }
 
-    private async Task JoinCall() {
-        var ok = await JS.InvokeAsync<bool>("startLocalVideo", "localVideo");
+    private async Task JoinCall(bool video) {
+        _isVideoEnabled = video;
+        var ok = await JS.InvokeAsync<bool>("startLocalVideo", "localVideo", video);
         if (ok && hub != null) {
             _inCall = true;
             await JS.InvokeVoidAsync("spideyVibrate", new int[] { 50, 30, 50 });
-            await hub.SendAsync("SendMessage", "Система", userName + " В ЭФИРЕ");
+            await hub.SendAsync("SendMessage", "Система", $"{userName} В ЭФИРЕ ({(video ? "ВИДЕО" : "АУДИО")})");
             await hub.SendAsync("SendSignal", "requestList", "all");
         }
     }

@@ -1,3 +1,4 @@
+/* SPIDEY_OS_v2.0_WEBRTC_CORE */
 let localStream;
 let pcs = {};
 let dotNetHelper;
@@ -25,28 +26,43 @@ window.spideyVibrate = (pattern) => { if (navigator.vibrate) navigator.vibrate(p
 
 window.scrollToEnd = (id) => {
     const el = document.getElementById(id);
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
 };
 
-window.startLocalVideo = async (id) => {
+// Расширенная функция запуска потока (поддерживает только голос или видео+голос)
+window.startLocalVideo = async (id, videoEnabled = true) => {
     try {
-        if (!localStream) {
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 320, height: 240, frameRate: 15 },
-                audio: true
-            });
+        if (localStream) {
+            localStream.getTracks().forEach(t => t.stop());
         }
-        document.getElementById(id).srcObject = localStream;
+
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: videoEnabled ? { width: 640, height: 480, frameRate: 24 } : false,
+            audio: true
+        });
+
+        const videoEl = document.getElementById(id);
+        if (videoEl) {
+            videoEl.srcObject = localStream;
+            // Если только голос - добавляем визуальный эффект заглушки
+            videoEl.style.opacity = videoEnabled ? "1" : "0.2";
+        }
         return true;
-    } catch (e) { return false; }
+    } catch (e) {
+        console.error("Ошибка доступа к медиа:", e);
+        return false;
+    }
 };
 
 function getOrCreatePC(remoteId) {
     if (pcs[remoteId]) return pcs[remoteId];
+
     const pc = new RTCPeerConnection(config);
     pcs[remoteId] = pc;
 
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    if (localStream) {
+        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    }
 
     pc.onicecandidate = (e) => {
         if (e.candidate && dotNetHelper) {
@@ -55,20 +71,36 @@ function getOrCreatePC(remoteId) {
     };
 
     pc.ontrack = (e) => {
-        let v = document.getElementById("video_" + remoteId);
-        if (!v) {
-            v = document.createElement("video");
-            v.id = "video_" + remoteId; v.autoplay = true; v.playsinline = true; v.className = "remote-v";
-            document.getElementById("remoteVideos").appendChild(v);
+        let container = document.getElementById("remoteVideos");
+        let vSlot = document.getElementById("slot_" + remoteId);
+
+        if (!vSlot) {
+            // Создаем структуру как в игре (слот с декором)
+            vSlot = document.createElement("div");
+            vSlot.id = "slot_" + remoteId;
+            vSlot.className = "v-slot remote-v-glitch";
+            vSlot.innerHTML = `
+                <video id="video_${remoteId}" autoplay playsinline></video>
+                <div class="v-badge">АКТИВЕН</div>
+                <div class="corner-decor top-left"></div>
+                <div class="corner-decor bottom-right"></div>
+            `;
+            container.appendChild(vSlot);
         }
-        v.srcObject = e.streams[0];
+
+        const videoEl = document.getElementById("video_" + remoteId);
+        if (videoEl) videoEl.srcObject = e.streams[0];
     };
+
     return pc;
 }
 
 window.createOfferGroup = async (id) => {
     const pc = getOrCreatePC(id);
-    const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+    const offer = await pc.createOffer({
+        offerToReceiveVideo: true,
+        offerToReceiveAudio: true
+    });
     await pc.setLocalDescription(offer);
     return JSON.stringify(offer);
 };
@@ -82,19 +114,31 @@ window.processOfferGroup = async (json, id) => {
 };
 
 window.processAnswerGroup = async (json, id) => {
-    if (pcs[id]) await pcs[id].setRemoteDescription(new RTCSessionDescription(JSON.parse(json)));
+    if (pcs[id]) {
+        await pcs[id].setRemoteDescription(new RTCSessionDescription(JSON.parse(json)));
+    }
 };
 
 window.addIceCandidateGroup = async (json, id) => {
-    if (pcs[id]) await pcs[id].addIceCandidate(new RTCIceCandidate(JSON.parse(json))).catch(() => { });
+    if (pcs[id]) {
+        await pcs[id].addIceCandidate(new RTCIceCandidate(JSON.parse(json))).catch(() => { });
+    }
 };
 
 window.removeUser = (id) => {
-    if (pcs[id]) { pcs[id].close(); delete pcs[id]; document.getElementById("video_" + id)?.remove(); }
+    if (pcs[id]) {
+        pcs[id].close();
+        delete pcs[id];
+        document.getElementById("slot_" + id)?.remove();
+    }
 };
 
 window.hangup = () => {
     Object.keys(pcs).forEach(id => window.removeUser(id));
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    document.getElementById('localVideo').srcObject = null;
+    if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+    }
+    const localVid = document.getElementById('localVideo');
+    if (localVid) localVid.srcObject = null;
 };
